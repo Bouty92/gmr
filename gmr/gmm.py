@@ -1,6 +1,6 @@
 import numpy as np
-from .utils import check_random_state
-from .mvn import MVN
+from .utils import check_random_state, pinvh
+from .mvn import MVN, invert_indices
 
 
 class GMM(object):
@@ -244,6 +244,53 @@ class GMM(object):
             conditioned = self.condition(indices, X[n])
             Y[n] = conditioned.priors.dot(conditioned.means)
         return Y
+
+    def condition_derivative( self, indices, x ) :
+        """Provide the derivative of posterior means
+           relative to the known features.
+
+        Parameters
+        ----------
+        indices : array, shape (n_new_features,)
+            Indices of dimensions that we want to condition.
+
+        x : array, shape (n_new_features,)
+            Values of the features that we know.
+
+        Returns
+        -------
+        dYdX : array, shape (n_samples, n_features_2)
+            Derivative of the means of missing values.
+        """
+        self._check_initialized()
+
+        n_features = self.means.shape[1] - len( indices )
+        i1 = invert_indices( self.means.shape[1], indices )
+        i2 = indices
+
+        priors = np.empty( self.n_components )
+        prec_22 = []
+        for k in range( self.n_components ):
+            mvn = MVN( self.means[k], self.covariances[k], random_state=self.random_state )
+            priors[k] = ( self.priors[k]*mvn.marginalize( i2 ).to_probability_density( x ) )
+
+            cov_22 = self.covariances[k][np.ix_( i2, i2 )]
+            prec_22.append( pinvh( cov_22 ) )
+
+        dYdX = np.zeros(( len( i1 ), len( i2 ) ))
+        for i in range( self.n_components ):
+            cov_12 = self.covariances[i][np.ix_( i1, i2 )]
+
+            dYdX += priors[i]/priors.sum()*cov_12.dot( prec_22[i] )
+
+            dhdX = -priors.sum()*prec_22[i].dot( x - self.means[i][i2] )
+            for k in range( self.n_components ):
+                dhdX += priors[k]*prec_22[k].dot( x - self.means[k][i2] )
+            dhdX *= priors[i]/priors.sum()**2
+
+            dYdX += dhdX*( self.means[i][i1] + cov_12.dot( prec_22[i].dot( x - self.means[i][i2] ) ).T )
+
+        return dYdX
 
     def to_ellipses(self, factor=1.0):
         """Compute error ellipses.
