@@ -46,6 +46,13 @@ X[:, 1] = np.sin(X[:, 0]) + random_state.randn(n_samples) * 0.1
 gmm = GMM(n_components=3, random_state=0)
 gmm.from_samples(X)
 Y = gmm.predict(np.array([0]), X_test[:, np.newaxis])
+#x = 1.5
+x = 1.65
+#x = 3
+y = np.squeeze( gmm.predict(np.array([0]), np.array([ x ])[np.newaxis,:] ) )
+dxdy = np.squeeze( gmm.condition_derivative( np.array([0]), np.array([ x ]) ) )
+print( 'y( %g ):' % x, y )
+print( 'dydx( %g ):' % x, dxdy )
 
 plt.subplot(1, 2, 2)
 plt.title("Mixture of Experts: $p(Y | X) = \Sigma_k \pi_{k, Y|X} "
@@ -53,5 +60,7 @@ plt.title("Mixture of Experts: $p(Y | X) = \Sigma_k \pi_{k, Y|X} "
 plt.scatter(X[:, 0], X[:, 1])
 plot_error_ellipses(plt.gca(), gmm, colors=["r", "g", "b"])
 plt.plot(X_test, Y.ravel(), c="k", lw=2)
+d = 0.5
+plt.plot( [ x - d, x + d ], [ y - dxdy*d, y + dxdy*d ] )
 
 plt.show()
