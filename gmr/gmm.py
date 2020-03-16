@@ -213,7 +213,11 @@ class GMM(object):
                          mvn.marginalize(indices).to_probability_density(x))
             means[k] = conditioned.mean
             covariances[k] = conditioned.covariance
-        priors /= priors.sum()
+        priors_sum = priors.sum()
+        if priors_sum != 0 :
+            priors /= priors_sum
+        else :
+            priors *= 0
         return GMM(n_components=self.n_components, priors=priors, means=means,
                    covariances=covariances, random_state=self.random_state)
 
@@ -286,9 +290,14 @@ class GMM(object):
             dhdX = -priors.sum()*prec_22[i].dot( x - self.means[i][i2] )
             for k in range( self.n_components ):
                 dhdX += priors[k]*prec_22[k].dot( x - self.means[k][i2] )
-            dhdX *= priors[i]/priors.sum()**2
 
-            dYdX += dhdX*( self.means[i][i1] + cov_12.dot( prec_22[i].dot( x - self.means[i][i2] ) ).T )
+            priors_sum2 = priors.sum()**2
+            if priors_sum2 != 0 :
+                dhdX *= priors[i]/priors_sum2
+            else :
+                dhdX *= 0
+
+            dYdX += dhdX[:,np.newaxis].dot( ( self.means[i][i1] + cov_12.dot( prec_22[i].dot( x - self.means[i][i2] ) ).T )[np.newaxis,:] ).T
 
         return dYdX
 
