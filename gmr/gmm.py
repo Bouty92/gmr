@@ -1,5 +1,5 @@
 import numpy as np
-from .utils import check_random_state, pinvh
+from .utils import check_random_state, pinvh, Protect_loop
 from .mvn import MVN, invert_indices
 
 
@@ -44,7 +44,7 @@ class GMM(object):
         if self.covariances is None:
             raise ValueError("Covariances have not been initialized")
 
-    def from_samples(self, X, R_diff=1e-4, n_iter=100):
+    def from_samples(self, X, R_diff=1e-4, n_iter=100, plot=True):
         """MLE of the mean and covariance.
 
         Expectation-maximization is used to infer the model parameters. The
@@ -65,8 +65,8 @@ class GMM(object):
 
         Returns
         -------
-        self : MVN
-            This object.
+        log_likelihood : list of floats
+            log of the likelihood at each iteration.
         """
         n_samples, n_features = X.shape
 
@@ -86,28 +86,51 @@ class GMM(object):
             for k in range(self.n_components):
                 self.covariances[k] = np.eye(n_features)
 
-        R = np.zeros((n_samples, self.n_components))
-        for _ in range(n_iter):
-            R_prev = R
+        with Protect_loop() as interruption :
+            if plot :
+                import matplotlib.pyplot as plt
 
-            # Expectation
-            R = self.to_responsibilities(X)
+            R = np.zeros((n_samples, self.n_components))
+            log_likelihood = []
+            for i in range(n_iter):
+                print( 'Iteration %i\r' % i, end='' )
 
-            if np.linalg.norm(R - R_prev) < R_diff:
-                if self.verbose:
-                    print("EM converged.")
-                break
+                R_prev = R
 
-            # Maximization
-            w = R.sum(axis=0) + 10.0 * np.finfo(R.dtype).eps
-            R_n = R / w
-            self.priors = w / w.sum()
-            self.means = R_n.T.dot(X)
-            for k in range(self.n_components):
-                Xm = X - self.means[k]
-                self.covariances[k] = (R_n[:, k, np.newaxis] * Xm).T.dot(Xm)
+                # Expectation
+                R = self.to_responsibilities(X)
 
-        return self
+                if np.linalg.norm(R - R_prev) < R_diff:
+                    if self.verbose:
+                        print("EM converged.")
+                    break
+
+                # Maximization
+                w = R.sum(axis=0) + 10.0 * np.finfo(R.dtype).eps
+                R_n = R / w
+                self.priors = w / w.sum()
+                self.means = R_n.T.dot(X)
+                for k in range(self.n_components):
+                    Xm = X - self.means[k]
+                    self.covariances[k] = (R_n[:, k, np.newaxis] * Xm).T.dot(Xm)
+
+                likelihood = self.to_probability_density( X )
+                likelihood += 1e-6
+                log_likelihood.append( np.log( likelihood ).mean() )
+
+                if plot :
+                    plt.figure( 'log-likelihood of the model' )
+                    plt.cla()
+                    plt.plot( log_likelihood )
+                    plt.draw()
+                    plt.pause( 0.001 )
+
+                if interruption() :
+                    break
+
+        print( '\nFinal log-likelihood: %g' % log_likelihood[-1] )
+
+        return log_likelihood
 
     def sample(self, n_samples):
         """Sample from Gaussian mixture distribution.
@@ -217,6 +240,7 @@ class GMM(object):
         if priors_sum != 0 :
             priors /= priors_sum
         else :
+            print( 'DIVISION_BY_ZERO_IN_CONDITION' )
             priors *= 0
         return GMM(n_components=self.n_components, priors=priors, means=means,
                    covariances=covariances, random_state=self.random_state)
@@ -295,6 +319,7 @@ class GMM(object):
             if priors_sum2 != 0 :
                 dhdX *= priors[i]/priors_sum2
             else :
+                print( 'DIVISION_BY_ZERO_IN_CONDITION_DERIVATIVE' )
                 dhdX *= 0
 
             dYdX += dhdX[:,np.newaxis].dot( ( self.means[i][i1] + cov_12.dot( prec_22[i].dot( x - self.means[i][i2] ) ).T )[np.newaxis,:] ).T
