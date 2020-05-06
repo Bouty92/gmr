@@ -11,7 +11,14 @@ gmr
 
 Gaussian Mixture Models (GMMs) for clustering and regression in Python.
 
-Source code repository: https://github.com/AlexanderFabisch/gmr
+Original repository: https://github.com/AlexanderFabisch/gmr
+
+Changes made from the original repository:
+
+- Implementation of a method :code:`gmm.condition_derivative( indices, x )` to compute the gradient of the conditional expectation.
+- Addition of example scripts to test the computation of the gradient in 1D and 2D.
+- Computation and plotting of the log-likelihood at each iteration during training.
+- Interruptible training.
 
 .. image:: https://raw.githubusercontent.com/AlexanderFabisch/gmr/master/gmr.png
 
